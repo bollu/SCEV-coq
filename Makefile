@@ -75,3 +75,6 @@ documentation: doc/coq2html $(VFILES)
 	cp doc/coq2html.css doc/coq2html.js doc/html/
 
 -include .depend
+
+install:
+	echo "HOW TO INSTALL?"

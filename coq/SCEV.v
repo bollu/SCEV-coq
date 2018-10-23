@@ -651,6 +651,7 @@ Module Type RECURRENCE.
       
 
     (*  Lemma 18 *)
+    (* 
     Lemma mul_const_to_pure_sum: forall (c: R) (cr: CR) (n: nat),
         PureSumCR cr ->
         c * (cr # n) = (rewrite_pure_sum_cr_on_mul_const cr c) # n.
@@ -660,13 +661,13 @@ Module Type RECURRENCE.
       induction cr.
       - intros.
         inversion H; subst.
-        Opaque evalBR.
         simpl.
         (* 
         replace c with (evalBR (toBR c)  n).
         rewrite mul_b
          *)
-    Admitted.
+    Abort.
+    *)
   End CR.
 End RECURRENCE.
 

@@ -466,7 +466,8 @@ Module Type RECURRENCE.
       }.
 
 
-    Global Instance liftToBR_to_liftToCR `{A: Type} `{LiftToBR A} : LiftToCR A :=
+    Global Instance liftToBR_to_liftToCR
+           `{A: Type} `{LiftToBR A} : LiftToCR A :=
       {
         liftToCR (prebr: A) :=   liftBRToCR (liftToBR prebr)
                                
@@ -500,20 +501,25 @@ Module Type RECURRENCE.
 
     
     (** Basic theorem, show how to unfold CReval *)
-    Lemma CReval_recurcr_step: forall (cr': CR) (r: R) (bop: R -> R -> R) (n: nat),
+    Lemma CReval_recurcr_step: forall
+        `{Ring R}
+        (cr': CR) (r: R) (bop: R -> R -> R) (n: nat),
         (recurCR r bop cr') # (S n) =
-         bop ((CR_to_BR (recurCR r bop cr')) # n) (cr' # (S n)).
+        bop ((CR_to_BR (recurCR r bop cr')) # n) (cr' # (S n)).
     Proof.
       intros.
       Opaque evalBR.
       simpl.
       erewrite evalBR_step; eauto.
-      replace ((evalBR (CR_to_BR cr') # (S n))) with (cr' # (S n)); eauto.
+      Transparent evalBR.
     Qed.
+
+    Hint Rewrite @CReval_recurcr_step : Recurrence.
 
 
     (** Lemma 16 *)
-    Lemma add_const_to_CR:  forall (r c0: R) (cr: CR) (n: nat),
+    Lemma add_const_to_CR:
+      forall `{Ring R} (r c0: R) (cr: CR) (n: nat),
         r + ((recurCR c0 plus cr) # n) =
         ((recurCR (c0 + r) plus cr) # n).
     Proof.
@@ -531,14 +537,14 @@ Module Type RECURRENCE.
         ring.
     Qed.
 
-    
     Hint Resolve add_const_to_CR : Recurrence.
     Hint Rewrite @add_const_to_CR : Recurrence.
 
     
 
     (** Lemma 17 *)
-    Lemma mul_const_to_CR:  forall (r c0: R) (cr: CR) (n: nat),
+    Lemma mul_const_to_CR:
+      forall `{Ring R} (r c0: R) (cr: CR) (n: nat),
         r * ((recurCR c0 mult cr) # n) =
         ((recurCR (c0 * r) mult cr) # n).
     Proof.
@@ -548,7 +554,9 @@ Module Type RECURRENCE.
         simpl; auto; ring.
 
       - (** n = S n *)
-
+        repeat rewrite CReval_recurcr_step.
+        rewrite mul_constant_mul_br.
+        autorewrite with Recurrence.
     Qed.
 
 

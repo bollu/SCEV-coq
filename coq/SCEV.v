@@ -483,6 +483,12 @@ Module Type RECURRENCE.
     (** Define what it means to evaluate a CR *)
     Fixpoint CReval (cr: CR) (n: nat) := evalBR (liftToBR cr) n.
 
+    Lemma creval_lift_br_to_cr_inverses: forall (br: BR) (n: nat),
+        CReval (liftBRToCR br) n = evalBR br n.
+    Proof.
+      intros; auto.
+    Qed.
+      
     Instance LoopVariantCr : LoopVariant CR R :=
       {
         evalAtIx (cr: CR) (n: nat) := CReval cr n                                          
@@ -518,27 +524,6 @@ Module Type RECURRENCE.
       intros.
       simpl.
       induction n.
-      - simpl. ring.
-      - rewrite seq_peel_end; try omega.
-        replace (1 + S n - 1)%nat with (S n); try omega.
-        replace (S n - 1)%nat with n; try omega.
-        repeat (rewrite map_app).
-        repeat (rewrite fold_left_app).
-        rewrite <- IHn.
-        simpl.
-        ring.
-    Qed.
-    
-    
-    (** Represent a PureCR of binary operation bop *)
-    (** Note that the paper is vague here! In the definition, it defines
-        pure sum CR as:
-           {{c0, +, c1, +, ..., f_k }} (note the f_k)
-        However, at Lemma 22, it's used as
-           {{c0, +, c1, +, ..., c_k }} (note the c_k)
-
-        Question remains open, should it end with a constant or a function?
-     **)
     Inductive PureCR (bop: R -> R -> R): Type :=
     | PureBR: R -> R -> PureCR bop
     |  PureCRRec:
@@ -555,6 +540,13 @@ Module Type RECURRENCE.
       | PureBR r1 r2 => liftBRToCR (mkBR r1 bop (const r2))
       | PureCRRec r cr' => (recurCR r bop (purecr_to_cr cr'))
       end.
+
+    
+    
+  Instance loopVariantPureCR (f: R -> R -> R): LoopVariant (PureCR f) (R : Type) :=
+    {
+      evalAtIx (purecr: PureCR f) (n: nat) := (purecr_to_cr purecr) # n
+    }.
 
     (** Zip the two pureCRs together, to construct a longer PureCR.
      NOTE: This assumes that cr1 is longer than cr2.
@@ -580,8 +572,27 @@ Module Type RECURRENCE.
     Definition PureProdCR : Type  := PureCR mult.
 
     (** Lemma 22 *)
-    Definition rewrite_pure_sum_cr_on_add_cr
-               (crlong crshort: PureSumCR) :=
+    Lemma rewrite_pure_sum_cr_on_add_cr: forall
+        (crlong crshort: PureSumCR)
+        (pureout: PureSumCR)
+        (ZIP: zip_purecrs crlong crshort = Some pureout) (n: nat),
+        crlong # n + crshort # n = pureout # n.
+    Proof.
+      intros.
+      simpl.
+
+      generalize dependent pureout.
+      induction crlong eqn:CRLONG.
+      - (* CRLONG = pure *)
+        intros.
+        simpl in ZIP.
+
+        induction crshort eqn:CRSHORT.
+        + (* crshort = PureBR *)
+          Opaque CReval.
+          simpl.
+      
+        
       
       
       

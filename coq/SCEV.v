@@ -90,6 +90,7 @@ End LISTTHEOREMS.
 (** HintDB of hints for SCEV **)
 Global Create HintDb Recurrence.
 
+
 (** You can build the theory of SCEV over any ring, actually *)
 Module Type RECURRENCE.
 
@@ -113,7 +114,8 @@ Module Type RECURRENCE.
     }.
   Infix "#" := evalAtIx (at level 10).
 
-  Global Instance loopVariantFn (R: Type): LoopVariant (nat -> R) (R : Type) :=
+  Global Instance loopVariantFn (R: Type):
+    LoopVariant (nat -> R) (R : Type) :=
     {
       evalAtIx (f: nat -> R) (n: nat) := f n
     }.
@@ -134,11 +136,13 @@ Module Type RECURRENCE.
     Inductive BR :=
     | mkBR : R -> (R -> R -> R) -> (nat -> R) -> BR.
 
+    (** I need to define the notation outside again as wel **)
     Notation "'{{' const ',' bop ',' fn  '}}'" :=
       (mkBR const bop fn) (at level 30).
 
 
-    (** semantics of evaluating a BR *)
+    (** Semantics of evaluating a BR. It's too convenient to be able to
+    `Opaque` and `Transparent` this to give it up *)
     Definition evalBR (br: BR) (n: nat): R :=
       match br with
       | mkBR r0 binop f =>
@@ -149,29 +153,30 @@ Module Type RECURRENCE.
       end.
 
 
+    (** semantics of evaluating a BR *)
     Global Instance loopVariantBR : LoopVariant BR R :=
       {
-        evalAtIx (br: BR) (n: nat) := evalBR br n
+        evalAtIx (br: BR) (n: nat) := evalBR br n 
       }.
 
-    Class LiftToBR A : Type  :=
+    Class ToBR A : Type  :=
       {
-        liftToBR : A -> BR
+        toBR : A -> BR
       }.
 
-    Global Instance liftConstantToBR : LiftToBR R :=
+    Global Instance liftConstantToBR : ToBR R :=
       {
-        liftToBR (c: R) := mkBR c plus (const zero)
+        toBR (c: R) := mkBR c plus (const zero)
       }.
 
-    Global Instance liftBRToBR: LiftToBR BR :=
+    Global Instance liftBRToBR: ToBR BR :=
       {
-        liftToBR br := br
+        toBR br := br
       }.
 
 
     Lemma liftConstant_eval: forall (n: nat) (r: R),
-        evalAtIx (liftToBR r)  n = r.
+        evalAtIx (toBR r)  n = r.
     Proof.
       intros.
       simpl.
@@ -234,7 +239,7 @@ Module Type RECURRENCE.
 
       (* Lemma 6 from paper *)
       Lemma add_constant_add_br: forall `{Ring R}  (n: nat),
-          ((liftToBR c) # n) +
+          ((toBR c) # n) +
           {{r0, plus, f}} # n = 
           {{(r0 + c), plus, f}} # n.
       Proof.
@@ -245,8 +250,8 @@ Module Type RECURRENCE.
           ring_simplify in IHn.
           ring_simplify.
 
-          replace (liftToBR c # (S n)) with
-              (liftToBR c # n).
+          replace (toBR c # (S n)) with
+              (toBR c # n).
           rewrite IHn.
           rewrite <- evalBR_step.
           reflexivity.
@@ -261,7 +266,7 @@ Module Type RECURRENCE.
       (* Lemma 7 *)
       (* Here is where I need a module :( nat -> R forms a module over R *)
       Lemma mul_constant_add_br: forall `{Ring R} (n: nat),
-          ((liftToBR c) # n) * ((mkBR r0 plus f) # n) =
+          ((toBR c) # n) * ((mkBR r0 plus f) # n) =
           (mkBR (c * r0) plus (scaleLoopVariantFn c f)) # n.
       Proof.
         intros.
@@ -269,13 +274,13 @@ Module Type RECURRENCE.
         - simpl. ring.
         - rewrite evalBR_step.
 
-          replace (liftToBR c # (S n)) with
-              (liftToBR c # n).
+          replace (toBR c # (S n)) with
+              (toBR c # n).
           ring_simplify.
           rewrite IHn.
           rewrite evalBR_step.
           
-          replace ((liftToBR c # n) * (f # (S n))) with
+          replace ((toBR c # n) * (f # (S n))) with
               ((scaleLoopVariantFn c f) # (S n)).
           reflexivity.
 
@@ -316,8 +321,8 @@ Module Type RECURRENCE.
     End BR_CONSTANTS.
 
     Section BR_BR.
-      Variable c1 c2: R.
-      Variable f1 f2: nat -> R.
+      Parameter c1 c2: R.
+      Parameter f1 f2: nat -> R.
       Let br1_add := mkBR c1 plus f1.
       Let br1_mul := mkBR c1 mult f1.
 
@@ -360,55 +365,54 @@ Module Type RECURRENCE.
       (* Lemma 13 *)
       (* Definition in paper is WRONG. They index both br1, br2 and the
     functions with the _same index_. It should be one minus *)
-      Definition mulCRFn (n: nat): R:=  ((br1_add # (n - 1)) * (f2 # n) +
-                                       (br2_add # (n - 1)) * (f1 # n) +
-                                       (f1 # n) * (f2 # n)).
+      Definition mulCRFn (n: nat): R:=
+        ((br1_add # (n - 1)) * (f2 # n) +
+         (br2_add # (n - 1)) * (f1 # n) +
+         (f1 # n) * (f2 # n)).
 
-      Lemma mul_add_br_add_br: forall `{Ring R} (n: nat),
-          (br1_add # n) * (br2_add # n) = ((mkBR (c1 * c2) plus (mulCRFn)) # n).
+      Lemma mul_add_br_add_br:
+        forall `{Ring R}
+          (n: nat),
+          (br1_add # n) * (br2_add # n) =
+          ((mkBR (c1 * c2) plus (mulCRFn)) # n).
       Proof.
         intros.
         induction n.
         - simpl. ring.
-        - unfold br1_add, br2_add in *.
-          rewrite evalBR_step.
-          rewrite evalBR_step.
-
-          ring_simplify.
-          rewrite IHn.
-          Opaque evalBR.
-          simpl.
+        - (** induction **)
+          unfold br1_add, br2_add in *.
+          repeat rewrite evalBR_step.
+          repeat fold br1_add.
+          repeat fold br2_add.
           ring_simplify.
 
-          remember (evalBR (mkBR c1 plus f1) n * f2 (S n)) as BR1F2.
-          remember ( f1 (S n) * evalBR (mkBR c2 plus f2) n) as BR2F1.
-          remember (f2 (S n) * f1 (S n)) as F1F2.
-          replace (evalBR (mkBR (c1 * c2) plus mulCRFn) n + BR1F2 + F1F2 + BR2F1)
-            with (evalBR (mkBR (c1 * c2) plus mulCRFn) n + (mulCRFn (S n))).
-
-          rewrite evalBR_step.
+          (** This is because I need to be able to simplify the #
+          evaluation of functions *)
+          Opaque loopVariantBR.
           simpl.
-          auto.
 
-          ring_simplify.
-          
-          cut (mulCRFn (S n) = BR1F2 + F1F2 + BR2F1).
-          intros EQ. rewrite EQ. ring.
+          replace
+            (br1_add # n * br2_add # n +
+             br1_add # n * f2 (S n) +
+             f1 (S n) * br2_add # n +
+             f1 (S n) * f2 (S n)) with
+              (br1_add # n * br2_add # n +
+               (br1_add # n * f2 (S n) +
+                br2_add # n * f1 (S n) +
+                f1 (S n) * f2 (S n))); try ring.
 
-          
-          unfold mulCRFn.
+          replace (br1_add # n * f2 (S n) +
+                   br2_add # n * f1 (S n) +
+                   f1 (S n) * f2 (S n)) with (mulCRFn (S n));
+            try (unfold mulCRFn; simpl;
+                 replace (n - 0)%nat with n; try omega; auto; ring; fail).
 
-          rewrite HeqBR1F2.
-          rewrite HeqBR2F1.
-          rewrite HeqF1F2.
-          simpl.
-          unfold br1_add.
-          unfold br2_add.
-          simpl.
-          replace (n - 0)%nat with n.
-          ring.
-          omega.
-          Transparent evalBR.
+          rewrite <- IHn.
+          fold br1_add.
+          fold br2_add.
+          reflexivity.
+
+          Transparent loopVariantBR.
       Qed.
 
       Hint Resolve mul_add_br_add_br : Recurrence.
@@ -421,22 +425,21 @@ Module Type RECURRENCE.
           ((mkBR (c1 * c2) mult (fun n => (f1 n * f2 n))) # n).
       Proof.
         intros.
+
         induction n.
         - simpl. ring.
         - unfold br1_mul, br2_mul in *.
-          rewrite evalBR_step.
-          rewrite evalBR_step.
+          repeat rewrite evalBR_step.
+          
           ring_simplify.
           replace ((mkBR c1 mult f1 # n) * (f1 # (S n)) *
                    (mkBR c2 mult f2 # n) * (f2 # (S n))) with
               ((mkBR c1 mult f1 # n) * (mkBR c2 mult f2 # n) *
                (f1 # (S n)) * (f2 # (S n))); try ring.
           rewrite IHn.
-          rewrite evalBR_step.
-          Opaque evalBR.
           simpl.
-          ring.
-          Transparent evalBR.
+          ring_simplify.
+          reflexivity.
       Qed.
 
       
@@ -447,12 +450,17 @@ Module Type RECURRENCE.
 
     End BR_BR.
 
-    
+    Opaque evalBR.
   End BR.
 
+  (** I need to define the notation outside again as wel **)
+  Notation "'{{' const ',' bop ',' fn  '}}'" :=
+    (mkBR const bop fn) (at level 30): recurrence_scope.
 
   (** Define a chain of recurrences *)
   Section CR.
+    Open Scope recurrence_scope.
+    
     Inductive CR :=
     | liftBRToCR: BR -> CR
     | recurCR: R -> (R -> R -> R) -> CR -> CR
@@ -460,33 +468,23 @@ Module Type RECURRENCE.
     
 
     
-    Class LiftToCR A : Type  :=
-      {
-        liftToCR : A -> CR
-      }.
-
-
-    Global Instance liftToBR_to_liftToCR
-           `{A: Type} `{LiftToBR A} : LiftToCR A :=
-      {
-        liftToCR (prebr: A) :=   liftBRToCR (liftToBR prebr)
-                               
-      }.
 
     (** Interpret a CR as nested BRs as described in section 2 -
        Chains of Recurrences *)
     Fixpoint CR_to_BR (cr: CR): BR :=
       match cr with
       | liftBRToCR br =>  br
-      | recurCR r0 bop cr' => mkBR r0 bop (evalBR (CR_to_BR cr'))
+      | recurCR r0 bop cr' => mkBR r0 bop (evalAtIx (CR_to_BR cr'))
       end.
 
 
+    Definition evalCR(cr: CR) (n: nat): R := (CR_to_BR cr) # n.
+      
 
     (** Define what it means to evaluate a CR *)
     Instance LoopVariantCr : LoopVariant CR R :=
       {
-        evalAtIx (cr: CR) (n: nat) := evalBR (CR_to_BR cr) n
+        evalAtIx (cr: CR) (n: nat) := evalCR cr n
       }.
 
     Lemma creval_lift_br_to_cr_inverses: forall (br: BR) (n: nat),
@@ -495,26 +493,45 @@ Module Type RECURRENCE.
       intros; auto.
     Qed.
 
-    
     Hint Resolve creval_lift_br_to_cr_inverses: Recurrence.
-      
+
+    (** Show what happens at n = 0 *)
+    Lemma evalCR_zero: forall
+        `{Ring R}
+        (cr': CR) (r: R) (bop: R -> R -> R),
+        (recurCR r bop cr') # 0 = r.
+    Proof.
+      intros.
+      simpl.
+      unfold evalCR.
+      auto.
+    Qed.
+    Hint Rewrite @evalCR_zero: Recurrence.
 
     
     (** Basic theorem, show how to unfold CReval *)
-    Lemma CReval_recurcr_step: forall
+    Lemma evalCR_step: forall
         `{Ring R}
         (cr': CR) (r: R) (bop: R -> R -> R) (n: nat),
         (recurCR r bop cr') # (S n) =
-        bop ((CR_to_BR (recurCR r bop cr')) # n) (cr' # (S n)).
+          bop (({{r , bop, evalAtIx (CR_to_BR cr')}}) # n)
+              ((evalAtIx (CR_to_BR cr')) # (S n)).
     Proof.
       intros.
-      Opaque evalBR.
       simpl.
-      erewrite evalBR_step; eauto.
-      Transparent evalBR.
+      unfold evalCR.
+
+      unfold CR_to_BR.
+      fold CR_to_BR.
+
+      rewrite evalBR_step.
+      auto.
     Qed.
 
-    Hint Rewrite @CReval_recurcr_step : Recurrence.
+    Hint Rewrite @evalCR_step: Recurrence.
+
+    (** Now that we know what happens at 0 and inductive case, we're done *)
+    Opaque evalCR.
 
 
     (** Lemma 16 *)
@@ -526,14 +543,12 @@ Module Type RECURRENCE.
       intros.
       simpl.
       induction n.
-      - simpl. ring.
-      - rewrite seq_peel_end; try omega.
-        replace (1 + S n - 1)%nat with (S n); try omega.
-        replace (S n - 1)%nat with n; try omega.
-        repeat (rewrite map_app).
-        repeat (rewrite fold_left_app).
-        rewrite <- IHn.
-        simpl.
+      - repeat rewrite evalCR_zero. ring.
+        
+      - repeat rewrite evalCR_step.
+        erewrite <- add_constant_add_br; auto.
+
+        rewrite liftConstant_eval.
         ring.
     Qed.
 
@@ -551,16 +566,17 @@ Module Type RECURRENCE.
       intros.
       induction n.
       - (** n = 0 *)
-        simpl; auto; ring.
-
+        repeat rewrite evalCR_zero; auto. ring.
+        
       - (** n = S n *)
-        repeat rewrite CReval_recurcr_step.
-        rewrite mul_constant_mul_br.
-        autorewrite with Recurrence.
+        repeat rewrite evalCR_step.
+        ring_simplify.
+        
+        erewrite mul_constant_mul_br; auto.
+        ring.
     Qed.
-
-
       
+    (** Theory of pure CRs (CRs that have only one binary operator *)
     Inductive PureCR (bop: R -> R -> R): Type :=
     | PureBR: R -> R -> PureCR bop
     |  PureCRRec:
@@ -626,8 +642,8 @@ Module Type RECURRENCE.
 
         induction crshort eqn:CRSHORT.
         + (* crshort = PureBR *)
-          Opaque CReval.
           simpl.
+    Abort.
       
         
       
@@ -647,7 +663,7 @@ Module Type RECURRENCE.
         Opaque evalBR.
         simpl.
         (* 
-        replace c with (evalBR (liftToBR c)  n).
+        replace c with (evalBR (toBR c)  n).
         rewrite mul_b
          *)
     Admitted.

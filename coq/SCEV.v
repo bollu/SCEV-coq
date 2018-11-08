@@ -482,7 +482,7 @@ Module Type RECURRENCE.
       
 
     (** Define what it means to evaluate a CR *)
-    Instance LoopVariantCr : LoopVariant CR R :=
+    Global Instance loopVariantCR : LoopVariant CR R :=
       {
         evalAtIx (cr: CR) (n: nat) := evalCR cr n
       }.
@@ -594,12 +594,64 @@ Module Type RECURRENCE.
       | PureCRRec r cr' => (recurCR r bop (purecr_to_cr cr'))
       end.
 
-    
-    
-  Instance loopVariantPureCR (f: R -> R -> R): LoopVariant (PureCR f) (R : Type) :=
+    (** Give a way to simplify the evaluation of a PureBR *)
+    Lemma purecr_to_cr_eval_cr_inverses:
+      forall `{Ring R}
+        (bop: R -> R -> R)
+        (r1 r2: R)
+        (n: nat),
+        purecr_to_cr (PureBR bop r1 r2) # n =  {{r1, bop, (const r2)}} # n.
+    Proof.
+      intros.
+      simpl.
+      rewrite creval_lift_br_to_cr_inverses.
+      reflexivity.
+    Qed.
+        
+
+    Global Instance loopVariantPureCR (f: R -> R -> R):
+      LoopVariant (PureCR f) (R : Type) :=
     {
       evalAtIx (purecr: PureCR f) (n: nat) := (purecr_to_cr purecr) # n
     }.
+
+  (** Evaluation of pureCR at 0 *)
+  Lemma evalPureCR_zero:
+    forall `{Ring R}
+      (bop: R -> R -> R)
+      (r: R)
+      (pcr': PureCR bop),
+      (PureCRRec r pcr') # 0 = r.
+  Proof.
+    intros.
+    simpl.
+    erewrite evalCR_zero; eauto.
+  Qed.
+
+  (** Step the evaluation of a pure CR *)
+  Lemma evalPureCR_step:
+    forall `{Ring R}
+      (n: nat)
+      (bop: R -> R -> R)
+      (r: R)
+      (pcr': PureCR bop),
+      (PureCRRec r pcr') # (S n) =
+      bop (({{r, bop, evalAtIx (CR_to_BR (purecr_to_cr pcr')) }}) # n)
+          (evalBR (CR_to_BR (purecr_to_cr pcr')) (S n)).
+  Proof.
+    intros until bop.
+    intros.
+    simpl.
+    rewrite evalCR_step.
+
+    remember ((evalAtIx (CR_to_BR (purecr_to_cr pcr'))) # (S n)) as SIMPL.
+    simpl in HeqSIMPL.
+
+    rewrite HeqSIMPL.
+    reflexivity.
+  Qed.
+             
+    
 
     (** Zip the two pureCRs together, to construct a longer PureCR.
      NOTE: This assumes that cr1 is longer than cr2.
@@ -620,54 +672,69 @@ Module Type RECURRENCE.
       | _ => None
       end.
 
+
     (* Define pure-sum and pure-product CRs *)
     Definition PureSumCR : Type := PureCR plus.
     Definition PureProdCR : Type  := PureCR mult.
 
     (** Lemma 22 *)
-    Lemma rewrite_pure_sum_cr_on_add_cr: forall
+    Lemma rewrite_pure_sum_cr_on_add_cr: forall (n: nat)
         (crlong crshort: PureSumCR)
         (pureout: PureSumCR)
-        (ZIP: zip_purecrs crlong crshort = Some pureout) (n: nat),
+        (ZIP: zip_purecrs crlong crshort = Some pureout),
         crlong # n + crshort # n = pureout # n.
     Proof.
-      intros.
-      simpl.
-
-      generalize dependent pureout.
+      intros until crshort.
+      generalize dependent n.
+      generalize dependent crshort.
+      Opaque loopVariantCR.
+      
       induction crlong eqn:CRLONG.
-      - (* CRLONG = pure *)
-        intros.
-        simpl in ZIP.
-
-        induction crshort eqn:CRSHORT.
-        + (* crshort = PureBR *)
-          simpl.
-    Abort.
-      
-        
-      
-      
-      
-
-    (*  Lemma 18 *)
-    (* 
-    Lemma mul_const_to_pure_sum: forall (c: R) (cr: CR) (n: nat),
-        PureSumCR cr ->
-        c * (cr # n) = (rewrite_pure_sum_cr_on_mul_const cr c) # n.
-    Proof.
-      intros until cr.
-      generalize dependent c.
-      induction cr.
-      - intros.
-        inversion H; subst.
+      - (* long = pureBR *)
         simpl.
-        (* 
-        replace c with (evalBR (toBR c)  n).
-        rewrite mul_b
-         *)
+        intros crshort.
+        induction crshort eqn:CRSHORT.
+        + (* short = pureBR *)
+          intros.
+          inversion ZIP; subst.
+          rewrite creval_lift_br_to_cr_inverses.
+          repeat erewrite purecr_to_cr_eval_cr_inverses.
+
+          (** TODO: make this a separately new theorem **)
+          induction n.
+          * simpl; ring.
+          * repeat erewrite evalBR_step.
+            ring_simplify.
+
+            replace (({{r, plus, const r0 }}) # n +
+                     (const r0) # (S n) +
+                     ({{r1, plus, const r2 }}) # n +
+                     (const r2) # (S n)) with
+                (({{r, plus, const r0 }}) # n +
+                     ({{r1, plus, const r2 }}) # n +
+                     (const r0) # (S n) +
+                     (const r2) # (S n)); (try ring).
+            rewrite IHn.
+            unfold const.
+            simpl.
+            ring.
+
+        + (* short = longer *)
+          intros.
+          discriminate.
+
+
+      - (* long = PureCRRec *)
+        induction crshort.
+
+        + (*crshort = small *)
+          intros.
+          admit.
+
+        +  (* crshort = large *)
+          intros.
+          (** write rule for zip *)
     Abort.
-    *)
   End CR.
 End RECURRENCE.
 

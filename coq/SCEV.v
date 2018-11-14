@@ -500,6 +500,13 @@ Module Type RECURRENCE.
 
 
     Definition evalCR(cr: CR) (n: nat): R := (CR_to_BR cr) # n.
+
+    Lemma evalBR_CR_to_BR: forall (cr: CR) (n: nat),
+        evalBR (CR_to_BR cr) n = evalCR cr n.
+    Proof.
+      intros.
+      reflexivity.
+    Qed.
       
 
     (** Define what it means to evaluate a CR *)
@@ -671,9 +678,23 @@ Module Type RECURRENCE.
     rewrite HeqSIMPL.
     reflexivity.
   Qed.
-        
-             
-    
+
+  
+  (** Step the evaluation of a pure CR *)
+  Lemma evalPureCR_step':
+    forall `{Ring R}
+      (n: nat)
+      (bop: R -> R -> R)
+      (r: R)
+      (pcr': PureCR bop),
+      (PureCRRec r pcr') # (S n) =
+      bop ((PureCRRec r pcr') # n) (pcr' # (S n)).
+  Proof.
+    intros.
+    simpl.
+    rewrite evalCR_step.
+    auto.
+  Qed.
 
     (** Zip the two pureCRs together, to construct a longer PureCR.
      NOTE: This assumes that cr1 and cr2 have the same length
@@ -750,18 +771,31 @@ Module Type RECURRENCE.
           * (* n = 0 *)simpl. auto.
           (** TODO: why do I need to make this
                        explicit *)
-          * rewrite evalPureCR_step with
+          * rewrite evalPureCR_step' with
                 (r := begin1')
                 (pcr' := cr1).
-           rewrite evalPureCR_step with
+           rewrite evalPureCR_step' with
                 (r := begin2')
                 (pcr' := cr2).
-           simpl in IHn.
-           Transparent evalCR.
-           unfold evalCR in IHn.
-           simpl in IHn.
-           simpl.
-            
+
+           rewrite evalPureCR_step' with
+                (r := (begin1' + begin2'))
+                (pcr' := p).
+           ring_simplify.
+
+           replace ((PureCRRec begin1' cr1) # n +
+                    cr1 # (S n) +
+                    (PureCRRec begin2' cr2) # n +
+                    cr2 # (S n)) with
+               (((PureCRRec begin1' cr1) # n +
+                 (PureCRRec begin2' cr2) # n) +
+                (cr1 # (S n) + cr2 # (S n))); try ring.
+           rewrite IHn.
+
+           (** why does replace work here, but not rewrite? *)
+           replace ((PureCRRec begin1' cr1) # n + (PureCRRec begin2' cr2) # n) with ((PureCRRec (begin1' + begin2') p) # n).
+           admit.
+
 
     Abort.
   End CR.

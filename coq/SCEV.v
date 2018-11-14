@@ -374,6 +374,9 @@ Module Type RECURRENCE.
          ((f1 # n) * {{c2, plus, f2}} # (n - 1))  +
          (f1 # n) * (f2 # n)).
 
+      (* Lemma 13 *)
+      (* Definition in paper is WRONG. They index both br1, br2 and the
+    functions with the _same index_. It should be one minus *)
       Lemma mul_add_br_add_br:
         forall `{Ring R}
           (c1 c2: R)
@@ -421,21 +424,21 @@ Module Type RECURRENCE.
 
       
       (* Lemma 14 *)
-      Lemma mul_mul_br_mul_br: forall `{Ring R} (n: nat),
-          (br1_mul # n) * (br2_mul # n) =
-          ((mkBR (c1 * c2) mult (fun n => (f1 n * f2 n))) # n).
+      Lemma mul_mul_br_mul_br: forall `{Ring R} (n: nat)
+        (r1 r2: R) (f1 f2: nat -> R),
+          ({{r1, mult, f1}} # n) * ({{r2, mult, f2}} # n) =
+          ((mkBR (r1 * r2) mult (fun n => (f1 n * f2 n))) # n).
       Proof.
         intros.
 
         induction n.
         - simpl. ring.
-        - unfold br1_mul, br2_mul in *.
-          repeat rewrite evalBR_step.
+        - repeat rewrite evalBR_step.
           
           ring_simplify.
-          replace ((mkBR c1 mult f1 # n) * (f1 # (S n)) *
-                   (mkBR c2 mult f2 # n) * (f2 # (S n))) with
-              ((mkBR c1 mult f1 # n) * (mkBR c2 mult f2 # n) *
+          replace ((mkBR r1 mult f1 # n) * (f1 # (S n)) *
+                   (mkBR r2 mult f2 # n) * (f2 # (S n))) with
+              ((mkBR r1 mult f1 # n) * (mkBR r2 mult f2 # n) *
                (f1 # (S n)) * (f2 # (S n))); try ring.
           rewrite IHn.
           simpl.
@@ -453,25 +456,7 @@ Module Type RECURRENCE.
       Hint Resolve add_add_br_add_br: Recurrence.
       Hint Rewrite @add_add_br_add_br: Recurrence.
 
-    Section BR_BR_2.
-      Parameter c1 c2: R.
-      Parameter f1 f2: nat -> R.
-      Let br1_add := mkBR c1 plus f1.
-      Let br1_mul := mkBR c1 mult f1.
-
-      Let br2_add := mkBR c2 plus f2.
-      Let br2_mul := mkBR c2 mult f2.
-
-
       
-      (* Lemma 13 *)
-      (* Definition in paper is WRONG. They index both br1, br2 and the
-    functions with the _same index_. It should be one minus *)
-      
-
-
-    End BR_BR_2.
-
     Opaque evalBR.
   End BR.
 
@@ -839,22 +824,18 @@ Module Type RECURRENCE.
                 (pcr' := cr2).
 
            rewrite evalPureCR_step with
-                (r := (begin1' + begin2'))
+                (r := (begin1' * begin2'))
                 (pcr' := p).
            ring_simplify.
 
-           replace ((PureCRRec begin1' cr1) # n +
-                    cr1 # (S n) +
-                    (PureCRRec begin2' cr2) # n +
-                    cr2 # (S n)) with
-               (((PureCRRec begin1' cr1) # n +
-                 (PureCRRec begin2' cr2) # n) +
-                (cr1 # (S n) + cr2 # (S n))); try ring.
-           rewrite IHn.
+           rewrite <- IHn.
+
 
            assert (CR1_PLUS_CR2:
-                     cr1 # (S n) + cr2 # (S n) = p # (S n)).
+                     cr1 # (S n) * cr2 # (S n) = p # (S n)).
            erewrite IHcr1; eauto.
+           rewrite <- CR1_PLUS_CR2.
+           ring_simplify. 
            congruence.
     Qed.
   End CR.

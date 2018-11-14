@@ -366,45 +366,27 @@ Module Type RECURRENCE.
           ring.
       Qed.
 
-      End BR_BR.
-
       
-      Hint Resolve add_add_br_add_br: Recurrence.
-      Hint Rewrite @add_add_br_add_br: Recurrence.
-
-    Section BR_BR_2.
-      Parameter c1 c2: R.
-      Parameter f1 f2: nat -> R.
-      Let br1_add := mkBR c1 plus f1.
-      Let br1_mul := mkBR c1 mult f1.
-
-      Let br2_add := mkBR c2 plus f2.
-      Let br2_mul := mkBR c2 mult f2.
-
-
-      
-      (* Lemma 13 *)
-      (* Definition in paper is WRONG. They index both br1, br2 and the
-    functions with the _same index_. It should be one minus *)
-      Definition mulCRFn (n: nat): R:=
-        ((br1_add # (n - 1)) * (f2 # n) +
-         (br2_add # (n - 1)) * (f1 # n) +
+      Definition mulCRFn `{Ring R} (c1 c2: R)
+                 (f1 f2: nat -> R)
+                 (n: nat): R:=
+        (((f2 # n) * {{c1, plus, f1}} # (n - 1))  +
+         ((f1 # n) * {{c2, plus, f2}} # (n - 1))  +
          (f1 # n) * (f2 # n)).
 
       Lemma mul_add_br_add_br:
         forall `{Ring R}
+          (c1 c2: R)
+          (f1 f2: nat -> R)
           (n: nat),
-          (br1_add # n) * (br2_add # n) =
-          ((mkBR (c1 * c2) plus (mulCRFn)) # n).
+          ({{c1, plus, f1}} # n) * ({{c2, plus, f2}} # n) =
+          ((mkBR (c1 * c2) plus (mulCRFn c1 c2 f1 f2)) # n).
       Proof.
         intros.
         induction n.
         - simpl. ring.
         - (** induction **)
-          unfold br1_add, br2_add in *.
           repeat rewrite evalBR_step.
-          repeat fold br1_add.
-          repeat fold br2_add.
           ring_simplify.
 
           (** This is because I need to be able to simplify the #
@@ -413,26 +395,24 @@ Module Type RECURRENCE.
           simpl.
 
           replace
-            (br1_add # n * br2_add # n +
-             br1_add # n * f2 (S n) +
-             f1 (S n) * br2_add # n +
+            ({{c1, plus, f1}} # n * {{c2, plus, f2}} # n +
+             {{c1, plus, f1}} # n * f2 (S n) +
+             f1 (S n) * {{c2, plus, f2}} # n +
              f1 (S n) * f2 (S n)) with
-              (br1_add # n * br2_add # n +
-               (br1_add # n * f2 (S n) +
-                br2_add # n * f1 (S n) +
+              ({{c1, plus, f1}} # n * {{c2, plus, f2}} # n +
+               ({{c1, plus, f1}} # n * f2 (S n) +
+                {{c2, plus, f2}} # n * f1 (S n) +
                 f1 (S n) * f2 (S n))); try ring.
 
-          replace (br1_add # n * f2 (S n) +
-                   br2_add # n * f1 (S n) +
-                   f1 (S n) * f2 (S n)) with (mulCRFn (S n));
+          replace ({{c1, plus, f1}} # n * f2 (S n) +
+                   {{c2, plus, f2}} # n * f1 (S n) +
+                   f1 (S n) * f2 (S n)) with
+              (mulCRFn c1 c2 f1 f2 (S n));
             try (unfold mulCRFn; simpl;
                  replace (n - 0)%nat with n; try omega; auto; ring; fail).
 
           rewrite <- IHn.
-          fold br1_add.
-          fold br2_add.
           reflexivity.
-
           Transparent loopVariantBR.
       Qed.
 
@@ -466,6 +446,27 @@ Module Type RECURRENCE.
       
       Hint Resolve mul_mul_br_mul_br : Recurrence.
       Hint Rewrite @mul_mul_br_mul_br : Recurrence.
+
+      End BR_BR.
+
+      
+      Hint Resolve add_add_br_add_br: Recurrence.
+      Hint Rewrite @add_add_br_add_br: Recurrence.
+
+    Section BR_BR_2.
+      Parameter c1 c2: R.
+      Parameter f1 f2: nat -> R.
+      Let br1_add := mkBR c1 plus f1.
+      Let br1_mul := mkBR c1 mult f1.
+
+      Let br2_add := mkBR c2 plus f2.
+      Let br2_mul := mkBR c2 mult f2.
+
+
+      
+      (* Lemma 13 *)
+      (* Definition in paper is WRONG. They index both br1, br2 and the
+    functions with the _same index_. It should be one minus *)
       
 
 
@@ -679,7 +680,7 @@ Module Type RECURRENCE.
      NOTE: If they do not, we can always ammend a CR with {0, +, 0}
     **)
   Fixpoint zip_purecrs_eq_len
-           (bop: R -> R -> R)
+           {bop: R -> R -> R}
            (cr1 cr2: PureCR bop):
       option (PureCR bop) :=
       match (cr1, cr2) with
@@ -694,8 +695,8 @@ Module Type RECURRENCE.
 
 
     (* Define pure-sum and pure-product CRs *)
-    Definition PureSumCR : Type := PureCR plus.
-    Definition PureProdCR : Type  := PureCR mult.
+    Notation PureSumCR := (PureCR plus).
+    Notation PureProdCR := (PureCR mult).
 
     (** Lemma 22 *)
     Lemma rewrite_pure_sum_cr_on_add_cr: forall
@@ -768,8 +769,88 @@ Module Type RECURRENCE.
                (((PureCRRec begin1' cr1) # n +
                  (PureCRRec begin2' cr2) # n) +
                 (cr1 # (S n) + cr2 # (S n))); try ring.
-           (** why does replace work here, but not rewrite? *)
-           replace ((PureCRRec begin1' cr1) # n + (PureCRRec begin2' cr2) # n) with ((PureCRRec (begin1' + begin2') p) # n).
+           rewrite IHn.
+
+           assert (CR1_PLUS_CR2:
+                     cr1 # (S n) + cr2 # (S n) = p # (S n)).
+           erewrite IHcr1; eauto.
+           congruence.
+    Qed.
+
+    
+    (** Lemma 22 *)
+    Lemma rewrite_pure_mul_cr_on_mul_cr: forall
+        `{Ring R}
+        (cr1 cr2: PureProdCR)
+        (pureout: PureProdCR)
+        (ZIP: zip_purecrs_eq_len cr1 cr2 = Some pureout)
+        (n: nat),
+        (cr1 # n) * (cr2 # n) = pureout # n.
+    Proof.
+      intros until cr1.
+
+      (** induction on cr1 *)
+      induction cr1 as [begin1 delta1 | begin1' cr1].
+      - (** cr1 = purebr **)
+        intros until cr2.
+        induction cr2 as [begin2 delta2 | begin2' cr2].
+
+        + (** cr2 = purebr *)
+          intros.
+          simpl in ZIP.
+          inversion ZIP.
+          Opaque evalBR.
+          simpl.
+          repeat rewrite creval_lift_br_to_cr_inverses.
+          ring_simplify.
+          rewrite mul_mul_br_mul_br.
+          apply evalBR_funext_delta; auto.
+
+        + (**cr2 = cr *)
+          intros.
+          simpl in ZIP.
+          inversion ZIP.
+
+      - (** cr1 = PureCRRec begin1' cr1 *)
+        intros cr2.
+        induction cr2 as [begin2 delta2 | begin2' cr2].
+
+        + (** cr2 = PureBR *)
+          intros.
+          simpl in ZIP.
+          inversion ZIP.
+
+        + (** cr2 = PureCR *)
+          intros.
+          simpl in ZIP.
+          destruct (zip_purecrs_eq_len cr1 cr2) eqn:ZIP_CR1_CR2;
+            simpl in ZIP;
+            inversion ZIP.
+
+          induction n.
+          * (* n = 0 *)simpl. auto.
+          (** TODO: why do I need to make this
+                       explicit *)
+          * rewrite evalPureCR_step with
+                (r := begin1')
+                (pcr' := cr1).
+           rewrite evalPureCR_step with
+                (r := begin2')
+                (pcr' := cr2).
+
+           rewrite evalPureCR_step with
+                (r := (begin1' + begin2'))
+                (pcr' := p).
+           ring_simplify.
+
+           replace ((PureCRRec begin1' cr1) # n +
+                    cr1 # (S n) +
+                    (PureCRRec begin2' cr2) # n +
+                    cr2 # (S n)) with
+               (((PureCRRec begin1' cr1) # n +
+                 (PureCRRec begin2' cr2) # n) +
+                (cr1 # (S n) + cr2 # (S n))); try ring.
+           rewrite IHn.
 
            assert (CR1_PLUS_CR2:
                      cr1 # (S n) + cr2 # (S n) = p # (S n)).

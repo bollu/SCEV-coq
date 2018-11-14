@@ -1,11 +1,14 @@
 SCEV-coq
 =========
 
+
 This is an implementation of the scalar evolution theory in Coq. In particular,
 it implements the math behind the "chains of recurrences" paper.
 
 ## Core types
 
+# Changelog
+- `v1.0` first release
 
 ## References
 

@@ -656,32 +656,10 @@ Module Type RECURRENCE.
     erewrite evalCR_zero; eauto.
   Qed.
 
-  (** Step the evaluation of a pure CR *)
-  Lemma evalPureCR_step:
-    forall `{Ring R}
-      (n: nat)
-      (bop: R -> R -> R)
-      (r: R)
-      (pcr': PureCR bop),
-      (PureCRRec r pcr') # (S n) =
-      bop (({{r, bop, evalAtIx (CR_to_BR (purecr_to_cr pcr')) }}) # n)
-          (evalBR (CR_to_BR (purecr_to_cr pcr')) (S n)).
-  Proof.
-    intros until bop.
-    intros.
-    simpl.
-    rewrite evalCR_step.
-
-    remember ((evalAtIx (CR_to_BR (purecr_to_cr pcr'))) # (S n)) as SIMPL.
-    simpl in HeqSIMPL.
-
-    rewrite HeqSIMPL.
-    reflexivity.
-  Qed.
 
   
   (** Step the evaluation of a pure CR *)
-  Lemma evalPureCR_step':
+  Lemma evalPureCR_step:
     forall `{Ring R}
       (n: nat)
       (bop: R -> R -> R)
@@ -771,14 +749,14 @@ Module Type RECURRENCE.
           * (* n = 0 *)simpl. auto.
           (** TODO: why do I need to make this
                        explicit *)
-          * rewrite evalPureCR_step' with
+          * rewrite evalPureCR_step with
                 (r := begin1')
                 (pcr' := cr1).
-           rewrite evalPureCR_step' with
+           rewrite evalPureCR_step with
                 (r := begin2')
                 (pcr' := cr2).
 
-           rewrite evalPureCR_step' with
+           rewrite evalPureCR_step with
                 (r := (begin1' + begin2'))
                 (pcr' := p).
            ring_simplify.
@@ -790,14 +768,14 @@ Module Type RECURRENCE.
                (((PureCRRec begin1' cr1) # n +
                  (PureCRRec begin2' cr2) # n) +
                 (cr1 # (S n) + cr2 # (S n))); try ring.
-           rewrite IHn.
-
            (** why does replace work here, but not rewrite? *)
            replace ((PureCRRec begin1' cr1) # n + (PureCRRec begin2' cr2) # n) with ((PureCRRec (begin1' + begin2') p) # n).
-           admit.
 
-
-    Abort.
+           assert (CR1_PLUS_CR2:
+                     cr1 # (S n) + cr2 # (S n) = p # (S n)).
+           erewrite IHcr1; eauto.
+           congruence.
+    Qed.
   End CR.
 End RECURRENCE.
 

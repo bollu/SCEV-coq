@@ -229,6 +229,27 @@ Module Type RECURRENCE.
     Hint Resolve evalBR_step : Recurrence.
     Hint Rewrite @evalBR_step : Recurrence.
 
+    (** Functional extentionality style theorems about the
+    evaluation of a BR *)
+    Section BR_FUNEXT.
+      Lemma evalBR_funext_delta:
+        forall `{Ring R} (n: nat)
+          (c: R) (f1 f2: nat -> R)
+          (bop: R -> R -> R)
+          (FUNEXT: forall (n: nat), f1 n = f2 n),
+          {{c, bop, f1}} # n = {{c, bop, f2 }} # n.
+      Proof.
+        intros until n.
+        induction n.
+        - (* n = 0 *)
+          intros; simpl; auto.
+        - (* n = S n *)
+          intros.
+          repeat rewrite evalBR_step.
+          erewrite IHn with (f2 := f2); auto.
+          replace (f1 # (S n)) with (f2 # (S n)); auto.
+      Qed.
+    End BR_FUNEXT.
 
 
     Section BR_CONSTANTS.
@@ -321,28 +342,16 @@ Module Type RECURRENCE.
     End BR_CONSTANTS.
 
     Section BR_BR.
-      Parameter c1 c2: R.
-      Parameter f1 f2: nat -> R.
-      Let br1_add := mkBR c1 plus f1.
-      Let br1_mul := mkBR c1 mult f1.
-
-      Let br2_add := mkBR c2 plus f2.
-      Let br2_mul := mkBR c2 mult f2.
-
-
       (* Lemma 12 *)
-      Definition add_add_br_add_br: forall `{Ring R} (n: nat),
-          (br1_add # n) + (br2_add # n) = (mkBR (c1 + c2) plus
-                                                (fun n => f1 n + f2 n)) # n.
+      Definition add_add_br_add_br: forall `{Ring R} (n: nat)
+      (c1 c2: R) (f1 f2: nat -> R),
+        ({{c1, plus, f1 }} # n) + ({{c2, plus, f2}} # n) =
+        ({{ (c1 + c2), plus, (fun n => f1 n + f2 n) }}) # n.
       Proof.
         intros.
         induction n.
         - simpl. ring.
-        - unfold br1_add in *.
-          unfold br2_add in *.
-          rewrite evalBR_step.
-          rewrite evalBR_step.
-          rewrite evalBR_step.
+          repeat rewrite evalBR_step.
           ring_simplify.
           replace ((mkBR c1 plus f1 # n) +
                    (f1 # (S n)) +
@@ -357,9 +366,21 @@ Module Type RECURRENCE.
           ring.
       Qed.
 
+      End BR_BR.
+
       
       Hint Resolve add_add_br_add_br: Recurrence.
       Hint Rewrite @add_add_br_add_br: Recurrence.
+
+    Section BR_BR_2.
+      Parameter c1 c2: R.
+      Parameter f1 f2: nat -> R.
+      Let br1_add := mkBR c1 plus f1.
+      Let br1_mul := mkBR c1 mult f1.
+
+      Let br2_add := mkBR c2 plus f2.
+      Let br2_mul := mkBR c2 mult f2.
+
 
       
       (* Lemma 13 *)
@@ -448,7 +469,7 @@ Module Type RECURRENCE.
       
 
 
-    End BR_BR.
+    End BR_BR_2.
 
     Opaque evalBR.
   End BR.
@@ -514,7 +535,7 @@ Module Type RECURRENCE.
         `{Ring R}
         (cr': CR) (r: R) (bop: R -> R -> R) (n: nat),
         (recurCR r bop cr') # (S n) =
-          bop (({{r , bop, evalAtIx (CR_to_BR cr')}}) # n)
+          bop ((recurCR r bop cr') # n)
               ((evalAtIx (CR_to_BR cr')) # (S n)).
     Proof.
       intros.
@@ -527,6 +548,7 @@ Module Type RECURRENCE.
       rewrite evalBR_step.
       auto.
     Qed.
+
 
     Hint Rewrite @evalCR_step: Recurrence.
 
@@ -546,9 +568,9 @@ Module Type RECURRENCE.
       - repeat rewrite evalCR_zero. ring.
         
       - repeat rewrite evalCR_step.
-        erewrite <- add_constant_add_br; auto.
-
-        rewrite liftConstant_eval.
+        ring_simplify.
+        simpl.
+        rewrite IHn.
         ring.
     Qed.
 
@@ -571,8 +593,7 @@ Module Type RECURRENCE.
       - (** n = S n *)
         repeat rewrite evalCR_step.
         ring_simplify.
-        
-        erewrite mul_constant_mul_br; auto.
+        rewrite IHn.
         ring.
     Qed.
       
@@ -650,22 +671,22 @@ Module Type RECURRENCE.
     rewrite HeqSIMPL.
     reflexivity.
   Qed.
+        
              
     
 
     (** Zip the two pureCRs together, to construct a longer PureCR.
-     NOTE: This assumes that cr1 is longer than cr2.
-     NOTE: If cr1 is not longer than cr2, it returns a Nothing *)
-    Fixpoint zip_purecrs (bop: R -> R -> R) (cr1 cr2: PureCR bop) :
+     NOTE: This assumes that cr1 and cr2 have the same length
+     NOTE: If they do not, we can always ammend a CR with {0, +, 0}
+    **)
+  Fixpoint zip_purecrs_eq_len
+           (bop: R -> R -> R)
+           (cr1 cr2: PureCR bop):
       option (PureCR bop) :=
       match (cr1, cr2) with
       (** recurrence *)
       | (PureCRRec r1 cr'1, PureCRRec r2 cr'2) =>
-        option_map (PureCRRec (bop r1 r2)) (zip_purecrs cr'1 cr'2)
-      (** Base case when cr1 is longer than cr2 *)
-      | (PureCRRec r11 (PureCRRec r12 cr'1), PureBR r21 r22) =>
-           Some (PureCRRec (bop r11 r21)
-                           (PureCRRec (bop r12 r22) cr'1))
+        option_map (PureCRRec (bop r1 r2)) (zip_purecrs_eq_len cr'1 cr'2)
       (** Base case when cr1 and cr2 have the same length *)
       | (PureBR r11 r12, PureBR r21 r22) =>
            Some (PureBR bop (bop r11 r21) (bop r12 r22))
@@ -678,62 +699,70 @@ Module Type RECURRENCE.
     Definition PureProdCR : Type  := PureCR mult.
 
     (** Lemma 22 *)
-    Lemma rewrite_pure_sum_cr_on_add_cr: forall (n: nat)
-        (crlong crshort: PureSumCR)
+    Lemma rewrite_pure_sum_cr_on_add_cr: forall
+        `{Ring R}
+        (cr1 cr2: PureSumCR)
         (pureout: PureSumCR)
-        (ZIP: zip_purecrs crlong crshort = Some pureout),
-        crlong # n + crshort # n = pureout # n.
+        (ZIP: zip_purecrs_eq_len cr1 cr2 = Some pureout)
+        (n: nat),
+        cr1 # n + cr2 # n = pureout # n.
     Proof.
-      intros until crshort.
-      generalize dependent n.
-      generalize dependent crshort.
-      Opaque loopVariantCR.
-      
-      induction crlong eqn:CRLONG.
-      - (* long = pureBR *)
-        simpl.
-        intros crshort.
-        induction crshort eqn:CRSHORT.
-        + (* short = pureBR *)
-          intros.
-          inversion ZIP; subst.
-          rewrite creval_lift_br_to_cr_inverses.
-          repeat erewrite purecr_to_cr_eval_cr_inverses.
+      intros until cr1.
 
-          (** TODO: make this a separately new theorem **)
+      (** induction on cr1 *)
+      induction cr1 as [begin1 delta1 | begin1' cr1].
+      - (** cr1 = purebr **)
+        intros until cr2.
+        induction cr2 as [begin2 delta2 | begin2' cr2].
+
+        + (** cr2 = purebr *)
+          intros.
+          simpl in ZIP.
+          inversion ZIP.
+          Opaque evalBR.
+          simpl.
+          repeat rewrite creval_lift_br_to_cr_inverses.
+          rewrite add_add_br_add_br.
+          apply evalBR_funext_delta; auto.
+
+        + (**cr2 = cr *)
+          intros.
+          simpl in ZIP.
+          inversion ZIP.
+
+      - (** cr1 = PureCRRec begin1' cr1 *)
+        intros cr2.
+        induction cr2 as [begin2 delta2 | begin2' cr2].
+
+        + (** cr2 = PureBR *)
+          intros.
+          simpl in ZIP.
+          inversion ZIP.
+
+        + (** cr2 = PureCR *)
+          intros.
+          simpl in ZIP.
+          destruct (zip_purecrs_eq_len cr1 cr2) eqn:ZIP_CR1_CR2;
+            simpl in ZIP;
+            inversion ZIP.
+
           induction n.
-          * simpl; ring.
-          * repeat erewrite evalBR_step.
-            ring_simplify.
+          * (* n = 0 *)simpl. auto.
+          (** TODO: why do I need to make this
+                       explicit *)
+          * rewrite evalPureCR_step with
+                (r := begin1')
+                (pcr' := cr1).
+           rewrite evalPureCR_step with
+                (r := begin2')
+                (pcr' := cr2).
+           simpl in IHn.
+           Transparent evalCR.
+           unfold evalCR in IHn.
+           simpl in IHn.
+           simpl.
+            
 
-            replace (({{r, plus, const r0 }}) # n +
-                     (const r0) # (S n) +
-                     ({{r1, plus, const r2 }}) # n +
-                     (const r2) # (S n)) with
-                (({{r, plus, const r0 }}) # n +
-                     ({{r1, plus, const r2 }}) # n +
-                     (const r0) # (S n) +
-                     (const r2) # (S n)); (try ring).
-            rewrite IHn.
-            unfold const.
-            simpl.
-            ring.
-
-        + (* short = longer *)
-          intros.
-          discriminate.
-
-
-      - (* long = PureCRRec *)
-        induction crshort.
-
-        + (*crshort = small *)
-          intros.
-          admit.
-
-        +  (* crshort = large *)
-          intros.
-          (** write rule for zip *)
     Abort.
   End CR.
 End RECURRENCE.
